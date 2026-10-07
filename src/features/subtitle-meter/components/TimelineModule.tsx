@@ -1,18 +1,23 @@
 import type { PointerEvent } from "react";
-import type { SubtitleCue, SubtitleProject } from "../models";
+import type { ReviewAnnotation, SubtitleCue, SubtitleProject } from "../models";
+import { resolveAnnotations } from "../analyzers/annotationAnchor";
+import { CATEGORY_LABELS, STATUS_LABELS } from "../annotationMeta";
 import type { SubtitleMeterViewModel } from "../viewmodels/subtitleMeterViewModel";
 export function TimelineModule({
   project,
   vm,
   selectedId,
   zoom,
+  annotations,
 }: {
   project: SubtitleProject;
   vm: SubtitleMeterViewModel;
   selectedId: string | null;
   zoom: number;
+  annotations: ReviewAnnotation[];
 }) {
   const maxTime = Math.max(1000, ...project.cues.map((cue) => cue.endMs));
+  const resolvedAnnotations = resolveAnnotations(project.cues, annotations);
   const trackPointerDown = (
     event: PointerEvent<HTMLButtonElement>,
     cue: SubtitleCue,
@@ -81,8 +86,48 @@ export function TimelineModule({
           </button>
         ))}
       </div>
+      {resolvedAnnotations.length > 0 && (
+        <div
+          className="annotation-rail"
+          style={{ minWidth: `${zoom * 100}%` }}
+          aria-label="批注锚点轨道"
+        >
+          {resolvedAnnotations.map(({ annotation, cues: matched, orphan }) =>
+            annotation.scope === "range" ? (
+              <span
+                key={annotation.id}
+                className={`annotation-range status-${annotation.status} ${
+                  orphan ? "orphan" : ""
+                }`}
+                title={`${CATEGORY_LABELS[annotation.category]} · ${STATUS_LABELS[annotation.status]} · ${annotation.body}`}
+                style={{
+                  left: `${(annotation.startMs / maxTime) * 100}%`,
+                  width: `${Math.max(
+                    0.8,
+                    ((annotation.endMs - annotation.startMs) / maxTime) * 100,
+                  )}%`,
+                }}
+              />
+            ) : (
+              !orphan &&
+              matched.map((cue) => (
+                <span
+                  key={`${annotation.id}-${cue.id}`}
+                  className={`annotation-dot status-${annotation.status}`}
+                  title={`第 ${cue.index} 条 · ${CATEGORY_LABELS[annotation.category]} · ${STATUS_LABELS[annotation.status]}`}
+                  style={{
+                    left: `calc(${((cue.startMs + cue.endMs) / 2 / maxTime) * 100}% - 4px)`,
+                  }}
+                />
+              ))
+            ),
+          )}
+        </div>
+      )}
       <div className="timeline-hint">
         拖动时间块调整起止位置 · 点击条目进行编辑
+        {resolvedAnnotations.length > 0 &&
+          " · 琥珀色标记为审校批注，始终按时间码锚定"}
       </div>
     </section>
   );

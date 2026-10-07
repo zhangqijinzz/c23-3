@@ -1,15 +1,18 @@
 import type { SubtitleCue, SubtitleIssue } from "../models";
 import type { SubtitleMeterViewModel } from "../viewmodels/subtitleMeterViewModel";
+import type { AnnotationDraft } from "./AnnotationComposer";
 export function InspectionModule({
   cues,
   issues,
   vm,
   selectedId,
+  onAnnotateCue,
 }: {
   cues: SubtitleCue[];
   issues: SubtitleIssue[];
   vm: SubtitleMeterViewModel;
   selectedId: string | null;
+  onAnnotateCue: (draft: AnnotationDraft) => void;
 }) {
   const selected = cues.find((cue) => cue.id === selectedId) ?? cues[0];
   const errors = issues.filter((issue) => issue.severity === "error").length;
@@ -59,8 +62,24 @@ export function InspectionModule({
         <div className="edit-card">
           <div className="edit-title">
             <span>当前条目 · #{selected.index}</span>
-            <span className={cps > 18 ? "warning-color" : ""}>
-              {cps.toFixed(1)} 字/秒
+            <span className="edit-title-right">
+              <button
+                type="button"
+                className="cue-annotate-button"
+                title="给此条字幕添加审校批注"
+                onClick={() =>
+                  onAnnotateCue({
+                    scope: "cue",
+                    startMs: selected.startMs,
+                    endMs: selected.endMs,
+                  })
+                }
+              >
+                ✎ 加批注
+              </button>
+              <span className={cps > 18 ? "warning-color" : ""}>
+                {cps.toFixed(1)} 字/秒
+              </span>
             </span>
           </div>
           <textarea

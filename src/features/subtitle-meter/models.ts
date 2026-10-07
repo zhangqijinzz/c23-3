@@ -20,6 +20,37 @@ export interface SubtitleIssue {
   severity: "info" | "warning" | "error";
   message: string;
 }
+export type AnnotationScope = "cue" | "range";
+export type AnnotationCategory =
+  | "timing"
+  | "wording"
+  | "punctuation"
+  | "terminology"
+  | "translation"
+  | "style"
+  | "other";
+export type AnnotationStatus = "open" | "in-progress" | "resolved" | "wont-fix";
+export interface AnnotationEvent {
+  at: number;
+  actor: string;
+  from?: AnnotationStatus;
+  to: AnnotationStatus;
+  note?: string;
+}
+export interface ReviewAnnotation {
+  id: string;
+  scope: AnnotationScope;
+  startMs: number;
+  endMs: number;
+  category: AnnotationCategory;
+  body: string;
+  status: AnnotationStatus;
+  createdBy: string;
+  createdAt: number;
+  history: AnnotationEvent[];
+  cueId?: string;
+  originIndex?: number;
+}
 export interface SubtitleProject {
   id: string;
   name: string;
@@ -32,6 +63,7 @@ export interface SubtitleProject {
     savedAt: number;
     cues: SubtitleCue[];
   }>;
+  annotations: ReviewAnnotation[];
 }
 export interface MeterState {
   phase: "empty" | "importing" | "ready" | "editing" | "exporting" | "error";

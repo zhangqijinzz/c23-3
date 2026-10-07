@@ -22,7 +22,12 @@ export async function readProject(): Promise<SubtitleProject | null> {
       const value = request.result;
       resolve(
         value && Array.isArray(value.cues) && Array.isArray(value.versions)
-          ? value
+          ? {
+              ...value,
+              annotations: Array.isArray(value.annotations)
+                ? value.annotations
+                : [],
+            }
           : null,
       );
       db.close();

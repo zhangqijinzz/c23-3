@@ -9,6 +9,10 @@ export function VersionExportModule({
   vm: SubtitleMeterViewModel;
   phase: string;
 }) {
+  const annotationCount = project.annotations.length;
+  const openCount = project.annotations.filter(
+    (annotation) => annotation.status === "open",
+  ).length;
   return (
     <section className="module version-module">
       <div className="module-head">
@@ -45,6 +49,23 @@ export function VersionExportModule({
               <span>恢复 ↗</span>
             </button>
           ))}
+        </div>
+      )}
+      {annotationCount > 0 && (
+        <div className="annotation-export-row">
+          <div>
+            <strong>审校批注清单</strong>
+            <small>
+              {annotationCount} 条批注
+              {openCount > 0 ? ` · ${openCount} 条待处理` : " · 均已处理"}
+            </small>
+          </div>
+          <button
+            className="secondary-button"
+            onClick={() => vm.exportAnnotations()}
+          >
+            导出批注 CSV ↓
+          </button>
         </div>
       )}
       <div className="export-row">

@@ -4,7 +4,10 @@ import { InspectionModule } from "../components/InspectionModule";
 import { PreviewModule } from "../components/PreviewModule";
 import { TimelineModule } from "../components/TimelineModule";
 import { VersionExportModule } from "../components/VersionExportModule";
+import { AnnotationModule } from "../components/AnnotationModule";
+import type { AnnotationDraft } from "../components/AnnotationComposer";
 import { createViewModel } from "../viewmodels/subtitleMeterViewModel";
+import { openAnnotationCount } from "../analyzers/annotationAnchor";
 
 const tabs = [
   { id: "import", number: "01", label: "导入项目", hint: "添加或恢复字幕" },
@@ -18,10 +21,17 @@ export function SubtitleMeter() {
   const vm = useMemo(createViewModel, []),
     state = useSyncExternalStore(vm.subscribe, vm.getSnapshot);
   const [activeTab, setActiveTab] = useState<TabId>("import");
+  const [composerDraft, setComposerDraft] = useState<AnnotationDraft | null>(
+    null,
+  );
   useEffect(() => {
     void vm.restore();
   }, [vm]);
   const project = state.project;
+  const openAnnotations = project
+    ? openAnnotationCount(project.annotations)
+    : 0;
+  const pendingTotal = state.issues.length + openAnnotations;
   const selected =
     project?.cues.find((cue) => cue.id === state.selectedId) ??
     project?.cues[0];
@@ -99,8 +109,17 @@ export function SubtitleMeter() {
               <strong>{tab.label}</strong>
               <small>{tab.hint}</small>
             </span>
-            {tab.id === "inspection" && project && state.issues.length > 0 && (
-              <span className="tab-count">{state.issues.length}</span>
+            {tab.id === "inspection" && project && pendingTotal > 0 && (
+              <span
+                className="tab-count"
+                title={
+                  openAnnotations > 0
+                    ? `${state.issues.length} 项自动检查问题 · ${openAnnotations} 条待处理批注`
+                    : undefined
+                }
+              >
+                {pendingTotal}
+              </span>
             )}
           </button>
         ))}
@@ -130,8 +149,13 @@ export function SubtitleMeter() {
                   </p>
                 </div>
                 <div className="overview-count">
-                  <strong>{state.issues.length}</strong>
+                  <strong>{pendingTotal}</strong>
                   <span>待处理问题</span>
+                  {openAnnotations > 0 && (
+                    <span className="overview-annotation-note">
+                      含 {openAnnotations} 条待处理批注
+                    </span>
+                  )}
                 </div>
               </section>
             ) : (
@@ -161,6 +185,7 @@ export function SubtitleMeter() {
                 vm={vm}
                 selectedId={state.selectedId}
                 zoom={state.zoom}
+                annotations={project.annotations}
               />
               <p className="page-tip">
                 选中字幕块可在「问题检查」中编辑文本与精确时间；拖动时间块可整体调整时段。
@@ -175,12 +200,28 @@ export function SubtitleMeter() {
         {activeTab === "inspection" &&
           (project ? (
             <div className="module-page inspection-page">
-              <InspectionModule
-                cues={project.cues}
-                issues={state.issues}
-                vm={vm}
-                selectedId={state.selectedId}
-              />
+              <div className="inspection-main">
+                <InspectionModule
+                  cues={project.cues}
+                  issues={state.issues}
+                  vm={vm}
+                  selectedId={state.selectedId}
+                  onAnnotateCue={(draft) => {
+                    setComposerDraft(draft);
+                    setActiveTab("inspection");
+                  }}
+                />
+                {(project.annotations.length > 0 || composerDraft !== null) && (
+                  <AnnotationModule
+                    cues={project.cues}
+                    annotations={project.annotations}
+                    vm={vm}
+                    composer={composerDraft}
+                    onOpenComposer={setComposerDraft}
+                    onCloseComposer={() => setComposerDraft(null)}
+                  />
+                )}
+              </div>
               <PreviewModule cue={selected} />
             </div>
           ) : (
@@ -200,10 +241,24 @@ export function SubtitleMeter() {
               <section className="module delivery-summary">
                 <span className="module-kicker">EXPORT CHECK</span>
                 <strong>
-                  {state.issues.length === 0
+                  {state.issues.length === 0 && openAnnotations === 0
                     ? "校对完成，可以导出"
-                    : `还有 ${state.issues.length} 项问题待查看`}
+                    : [
+                        state.issues.length > 0
+                          ? `${state.issues.length} 项问题待查看`
+                          : "",
+                        openAnnotations > 0
+                          ? `${openAnnotations} 条批注待处理`
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join("，")}
                 </strong>
+                {project.annotations.length > 0 && (
+                  <button onClick={() => vm.exportAnnotations()}>
+                    导出批注清单核对 <span>↓</span>
+                  </button>
+                )}
                 <button onClick={() => setActiveTab("inspection")}>
                   查看检查结果 <span>→</span>
                 </button>
