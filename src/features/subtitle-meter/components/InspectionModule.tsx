@@ -5,11 +5,13 @@ export function InspectionModule({
   issues,
   vm,
   selectedId,
+  onAnnotateCue,
 }: {
   cues: SubtitleCue[];
   issues: SubtitleIssue[];
   vm: SubtitleMeterViewModel;
   selectedId: string | null;
+  onAnnotateCue?: () => void;
 }) {
   const selected = cues.find((cue) => cue.id === selectedId) ?? cues[0];
   const errors = issues.filter((issue) => issue.severity === "error").length;
@@ -104,6 +106,17 @@ export function InspectionModule({
               />
             </label>
           </div>
+          {onAnnotateCue && (
+            <div className="edit-card-actions">
+              <button
+                type="button"
+                className="annotation-link-button"
+                onClick={onAnnotateCue}
+              >
+                ＋ 审校批注
+              </button>
+            </div>
+          )}
         </div>
       )}
     </section>

@@ -1,5 +1,9 @@
-import type { Format, SubtitleProject } from "../models";
+import type { Format, ReviewAnnotation, SubtitleProject } from "../models";
 import type { SubtitleMeterViewModel } from "../viewmodels/subtitleMeterViewModel";
+import { ANNOTATION_STATUS_LABELS } from "../review/annotation";
+
+const STATUS_ORDER = ["open", "progress", "resolved", "wontfix"] as const;
+
 export function VersionExportModule({
   project,
   vm,
@@ -9,6 +13,12 @@ export function VersionExportModule({
   vm: SubtitleMeterViewModel;
   phase: string;
 }) {
+  const annotations: ReviewAnnotation[] = project.annotations;
+  const counts = STATUS_ORDER.map((status) => ({
+    status,
+    count: annotations.filter((item) => item.status === status).length,
+  }));
+  const openCount = counts.find((item) => item.status === "open")?.count ?? 0;
   return (
     <section className="module version-module">
       <div className="module-head">
@@ -67,6 +77,36 @@ export function VersionExportModule({
           导出字幕 <span>↓</span>
         </button>
       </div>
+      {annotations.length > 0 && (
+        <div className="annotation-delivery">
+          <div className="version-row">
+            <div>
+              <strong>审校批注核对</strong>
+              <small>
+                {openCount > 0
+                  ? `还有 ${openCount} 条批注待处理，交付前请核对`
+                  : "批注均已处理，可导出清单随字幕交付"}
+              </small>
+            </div>
+            <button
+              className="secondary-button"
+              onClick={() => vm.exportAnnotations()}
+            >
+              导出批注清单 <span>↓</span>
+            </button>
+          </div>
+          <div className="annotation-delivery-counts">
+            {counts.map(({ status, count }) => (
+              <span
+                key={status}
+                className={`annotation-delivery-pill status-${status}`}
+              >
+                {ANNOTATION_STATUS_LABELS[status]} {count}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       <p className="privacy-note">字幕文件与项目版本仅保存在当前浏览器</p>
     </section>
   );

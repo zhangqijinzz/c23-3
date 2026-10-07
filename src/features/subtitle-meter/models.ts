@@ -20,11 +20,38 @@ export interface SubtitleIssue {
   severity: "info" | "warning" | "error";
   message: string;
 }
+export type AnnotationCategory =
+  | "text"
+  | "timing"
+  | "translation"
+  | "punctuation"
+  | "terminology"
+  | "other";
+export type AnnotationStatus = "open" | "progress" | "resolved" | "wontfix";
+export interface AnnotationHistoryEntry {
+  at: number;
+  by: string;
+  kind: "create" | "status";
+  from?: AnnotationStatus;
+  to?: AnnotationStatus;
+}
+export interface ReviewAnnotation {
+  id: string;
+  startMs: number;
+  endMs: number;
+  category: AnnotationCategory;
+  status: AnnotationStatus;
+  body: string;
+  createdAt: number;
+  createdBy: string;
+  history: AnnotationHistoryEntry[];
+}
 export interface SubtitleProject {
   id: string;
   name: string;
   format: Format;
   cues: SubtitleCue[];
+  annotations: ReviewAnnotation[];
   updatedAt: number;
   versions: Array<{
     id: string;

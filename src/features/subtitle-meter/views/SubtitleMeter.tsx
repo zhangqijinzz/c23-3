@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { AnnotationPanel } from "../components/AnnotationPanel";
+import type { AnnotationComposerRange } from "../components/AnnotationPanel";
 import { ImportModule } from "../components/ImportModule";
 import { InspectionModule } from "../components/InspectionModule";
 import { PreviewModule } from "../components/PreviewModule";
@@ -18,6 +20,9 @@ export function SubtitleMeter() {
   const vm = useMemo(createViewModel, []),
     state = useSyncExternalStore(vm.subscribe, vm.getSnapshot);
   const [activeTab, setActiveTab] = useState<TabId>("import");
+  const [composer, setComposer] = useState<AnnotationComposerRange | null>(
+    null,
+  );
   useEffect(() => {
     void vm.restore();
   }, [vm]);
@@ -25,6 +30,22 @@ export function SubtitleMeter() {
   const selected =
     project?.cues.find((cue) => cue.id === state.selectedId) ??
     project?.cues[0];
+  const annotations = project?.annotations ?? [];
+  const openAnnotations = annotations.filter(
+    (item) => item.status === "open",
+  ).length;
+  const startComposerForSelected = () => {
+    if (!selected) return;
+    setComposer({ startMs: selected.startMs, endMs: selected.endMs });
+  };
+  const startFreeComposer = () => {
+    const cue = selected ?? project?.cues[0];
+    setComposer(
+      cue
+        ? { startMs: cue.startMs, endMs: cue.endMs }
+        : { startMs: 0, endMs: 1000 },
+    );
+  };
 
   const loadDemo = () => {
     const content =
@@ -102,6 +123,11 @@ export function SubtitleMeter() {
             {tab.id === "inspection" && project && state.issues.length > 0 && (
               <span className="tab-count">{state.issues.length}</span>
             )}
+            {tab.id === "inspection" && openAnnotations > 0 && (
+              <span className="tab-count annotation" title="待处理审校批注">
+                批 {openAnnotations}
+              </span>
+            )}
           </button>
         ))}
       </nav>
@@ -129,9 +155,17 @@ export function SubtitleMeter() {
                     {project.format.toUpperCase()} · 已自动保存到此浏览器
                   </p>
                 </div>
-                <div className="overview-count">
-                  <strong>{state.issues.length}</strong>
-                  <span>待处理问题</span>
+                <div className="overview-counts">
+                  <div className="overview-count">
+                    <strong>{state.issues.length}</strong>
+                    <span>待处理问题</span>
+                  </div>
+                  {annotations.length > 0 && (
+                    <div className="overview-count annotation">
+                      <strong>{openAnnotations}</strong>
+                      <span>待处理批注</span>
+                    </div>
+                  )}
                 </div>
               </section>
             ) : (
@@ -180,8 +214,21 @@ export function SubtitleMeter() {
                 issues={state.issues}
                 vm={vm}
                 selectedId={state.selectedId}
+                onAnnotateCue={startComposerForSelected}
               />
               <PreviewModule cue={selected} />
+              <AnnotationPanel
+                cues={project.cues}
+                annotations={annotations}
+                vm={vm}
+                onSelectCue={(id) => {
+                  vm.selectCue(id);
+                  setComposer(null);
+                }}
+                onNewAnnotation={startFreeComposer}
+                composer={composer}
+                onCloseComposer={() => setComposer(null)}
+              />
             </div>
           ) : (
             emptyTab(
@@ -200,10 +247,24 @@ export function SubtitleMeter() {
               <section className="module delivery-summary">
                 <span className="module-kicker">EXPORT CHECK</span>
                 <strong>
-                  {state.issues.length === 0
+                  {state.issues.length === 0 && openAnnotations === 0
                     ? "校对完成，可以导出"
-                    : `还有 ${state.issues.length} 项问题待查看`}
+                    : [
+                        state.issues.length > 0
+                          ? `${state.issues.length} 项问题待查看`
+                          : null,
+                        openAnnotations > 0
+                          ? `${openAnnotations} 条审校批注待处理`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join("，")}
                 </strong>
+                {openAnnotations > 0 && (
+                  <small className="delivery-annotation-note">
+                    可在版本与交付页导出批注清单逐条核对
+                  </small>
+                )}
                 <button onClick={() => setActiveTab("inspection")}>
                   查看检查结果 <span>→</span>
                 </button>

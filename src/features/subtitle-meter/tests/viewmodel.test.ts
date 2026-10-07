@@ -55,4 +55,65 @@ describe("SubtitleMeterViewModel", () => {
     expect(vm.state.notice).toContain("导出失败");
     expect(vm.state.project!.cues[0].text).toBe("Immediate edit");
   });
+  it("tracks review annotations with status history and clears them on re-import", async () => {
+    await vm.importFile(new File(["x"], "clip.srt"));
+    const cue = vm.state.project!.cues[0];
+    await vm.addAnnotation({
+      startMs: cue.startMs,
+      endMs: cue.endMs,
+      category: "timing",
+      body: "建议提前 200ms",
+      reviewer: "审校甲",
+    });
+    let annotation = vm.state.project!.annotations[0];
+    expect(annotation.status).toBe("open");
+    expect(annotation.createdBy).toBe("审校甲");
+    await vm.setAnnotationStatus(annotation.id, "resolved", "校对乙");
+    annotation = vm.state.project!.annotations[0];
+    expect(annotation.status).toBe("resolved");
+    expect(annotation.history).toHaveLength(2);
+    expect(annotation.history[1]).toMatchObject({
+      kind: "status",
+      from: "open",
+      to: "resolved",
+      by: "校对乙",
+    });
+    // 空白内容或空时间区间不创建批注
+    await vm.addAnnotation({
+      startMs: 0,
+      endMs: 0,
+      category: "text",
+      body: "  ",
+      reviewer: "",
+    });
+    expect(vm.state.project!.annotations).toHaveLength(1);
+    // 重新导入后批注全部清空，避免串到新项目的时间码上
+    await vm.importFile(new File(["x"], "clip.srt"));
+    expect(vm.state.project!.annotations).toEqual([]);
+  });
+  it("keeps annotations anchored when cues move or a snapshot is restored", async () => {
+    await vm.importFile(new File(["x"], "clip.srt"));
+    const cue = vm.state.project!.cues[0];
+    await vm.addAnnotation({
+      startMs: cue.startMs,
+      endMs: cue.endMs,
+      category: "text",
+      body: "锚在时间码上",
+      reviewer: "审校甲",
+    });
+    const annotation = vm.state.project!.annotations[0];
+    await vm.saveVersion();
+    // 条目被挪走，批注仍留在原时间码（且不引用条目序号）
+    await vm.editCue(cue.id, {
+      startMs: cue.startMs + 20000,
+      endMs: cue.endMs + 20000,
+    });
+    const stored = vm.state.project!.annotations[0];
+    expect(stored.id).toBe(annotation.id);
+    expect(stored.startMs).toBe(cue.startMs);
+    expect(stored).not.toHaveProperty("cueId");
+    // 快照回退不影响批注本身，只改变其重新匹配结果
+    await vm.restoreVersion(vm.state.project!.versions[0].id);
+    expect(vm.state.project!.annotations[0].startMs).toBe(cue.startMs);
+  });
 });

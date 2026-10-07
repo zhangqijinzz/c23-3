@@ -2,13 +2,17 @@ import { detectIssues } from "../analyzers/issueDetector";
 import { formatSubtitles } from "../formatters/subtitleFormatter";
 import {
   emptyState,
+  type AnnotationCategory,
+  type AnnotationStatus,
   type Format,
   type MeterState,
+  type ReviewAnnotation,
   type SubtitleCue,
   type SubtitleProject,
 } from "../models";
 import { detectFormat, parseSubtitles } from "../parsers/subtitleParser";
 import { projectRepository } from "../repositories/projectRepository";
+import { buildAnnotationReport } from "../review/annotation";
 import { downloadSubtitles } from "../services/exportService";
 import { readTextFile } from "../services/fileService";
 export class SubtitleMeterViewModel {
@@ -67,6 +71,7 @@ export class SubtitleMeterViewModel {
         name: file.name,
         format,
         cues,
+        annotations: [],
         updatedAt: Date.now(),
         versions: [],
       };
@@ -120,6 +125,103 @@ export class SubtitleMeterViewModel {
     if (!project || !version) return;
     await this.commit({ ...project, cues: structuredClone(version.cues) });
     this.publish({ notice: `已恢复${version.label}` });
+  }
+  private async commitAnnotations(annotations: ReviewAnnotation[]) {
+    const project = this.state.project;
+    if (project)
+      await this.commit({
+        ...project,
+        annotations: structuredClone(annotations),
+      });
+  }
+  async addAnnotation(input: {
+    startMs: number;
+    endMs: number;
+    category: AnnotationCategory;
+    body: string;
+    reviewer: string;
+  }) {
+    const project = this.state.project;
+    if (!project) return;
+    const body = input.body.trim(),
+      by = input.reviewer.trim() || "匿名审校";
+    if (!body || input.endMs <= input.startMs) return;
+    const now = Date.now(),
+      id = `ann-${now}-${project.annotations.length}`;
+    const annotation: ReviewAnnotation = {
+      id,
+      startMs: input.startMs,
+      endMs: input.endMs,
+      category: input.category,
+      status: "open",
+      body,
+      createdAt: now,
+      createdBy: by,
+      history: [{ at: now, by, kind: "create" }],
+    };
+    await this.commitAnnotations([...project.annotations, annotation]);
+    this.publish({ notice: "已添加审校批注" });
+  }
+  async setAnnotationStatus(
+    id: string,
+    status: AnnotationStatus,
+    reviewer: string,
+  ) {
+    const project = this.state.project;
+    if (!project) return;
+    const target = project.annotations.find((item) => item.id === id);
+    if (!target || target.status === status) return;
+    const by = reviewer.trim() || "匿名审校",
+      now = Date.now();
+    const annotations = project.annotations.map((item) =>
+      item.id === id
+        ? {
+            ...item,
+            status,
+            history: [
+              ...item.history,
+              {
+                at: now,
+                by,
+                kind: "status" as const,
+                from: item.status,
+                to: status,
+              },
+            ],
+          }
+        : item,
+    );
+    await this.commitAnnotations(annotations);
+  }
+  async deleteAnnotation(id: string) {
+    const project = this.state.project;
+    if (!project) return;
+    await this.commitAnnotations(
+      project.annotations.filter((item) => item.id !== id),
+    );
+    this.publish({ notice: "批注已删除" });
+  }
+  exportAnnotations() {
+    const project = this.state.project;
+    if (!project || project.annotations.length === 0) return;
+    try {
+      const csv = buildAnnotationReport(project.annotations, project.cues);
+      const blob = new Blob([csv], {
+        type: "text/csv;charset=utf-8",
+      });
+      const url = URL.createObjectURL(blob),
+        anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${project.name.replace(/\.(srt|vtt)$/i, "")}-annotations.csv`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      this.publish({ notice: "批注清单已导出" });
+    } catch {
+      this.publish({
+        phase: "error",
+        notice: "批注清单导出失败，请重试",
+      });
+    }
   }
   async exportFile() {
     const project = this.state.project;

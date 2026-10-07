@@ -8,6 +8,7 @@ const sample: SubtitleProject = {
   name: "sample.srt",
   format: "srt",
   cues: [{ id: "cue-1", index: 1, startMs: 100, endMs: 2000, text: "Saved" }],
+  annotations: [],
   updatedAt: 1,
   versions: [],
 };
@@ -19,6 +20,30 @@ describe("IndexedDB project storage", () => {
       name: "sample.srt",
       cues: sample.cues,
     });
+  });
+
+  it("fills an empty annotations array for projects saved before reviews", async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open("subtitle-meter-db", 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction("projects", "readwrite");
+      transaction.objectStore("projects").put({
+        id: "subtitle-meter.current.v1",
+        name: "legacy.srt",
+        format: "srt",
+        cues: sample.cues,
+        versions: [],
+        updatedAt: 2,
+      });
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    db.close();
+    const restored = await readProject();
+    expect(restored?.annotations).toEqual([]);
   });
 
   it("downgrades malformed persisted data to an empty project", async () => {
